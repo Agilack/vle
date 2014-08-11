@@ -32,6 +32,7 @@
 #include <vle/gvle/NewDynamicsBox.hpp>
 #include <vle/utils/Path.hpp>
 #include <fstream>
+#include <iostream>//A enlever
 
 namespace vle { namespace gvle {
 
@@ -162,7 +163,6 @@ void DynamicBox::onNewLibrary()
 
     if (box.run() == Gtk::RESPONSE_OK) {
         NewDynamicsBox box2(mXml, mGVLE->currentPackage());
-
         if (box2.run() == Gtk::RESPONSE_OK and
             not box2.getClassName().empty() and
             not box2.getNamespace().empty()) {

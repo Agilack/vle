@@ -979,7 +979,6 @@ void AtomicModelBox::DynamicTreeView::onRowActivated(
 
 	std::transform(searchFile.begin(), searchFile.end(),
 		       searchFile.begin(), tolower);
-
 	std::string newTab = pathFileSearch(
 	    mGVLE->getPackageSrcDir(), searchFile);
         if (not newTab.empty()) {

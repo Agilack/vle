@@ -745,7 +745,6 @@ void GVLE::onOpenVpz()
 
         if (response == Gtk::RESPONSE_OK) {
             std::string vpz_file = file.get_filename();
-
             parseXML(vpz_file);
             getEditor()->openTabVpz(mModeling->getFileName(),
                                     mModeling->getTopModel());
