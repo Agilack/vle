@@ -99,7 +99,7 @@ Condition& Conditions::add(const Condition& condition)
 
 void Conditions::del(const std::string& condition)
 {
-    if (condition != Experiment::defaultSimulationEngineCondName())
+//    if (condition != Experiment::defaultSimulationEngineCondName())
         m_list.erase(condition);
 }
 
