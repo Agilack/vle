@@ -256,13 +256,13 @@ bool fileVpzView::isUsed(int *reason = 0)
     return (flag != 0);
 }
 
-void fileVpzView::diagSelectModel(vleVpzModel *base)
+void fileVpzView::diagSelectModel(vleVpzModel *base, bool force)
 {
     // If the current item has no parent ... it is the root item
     if (base == 0)
         base = mVpz->mRootModel;
 
-    if (base != mCurrentModel)
+    if ((base != mCurrentModel) || force)
     {
         // The the model to maximize is currently selected, deselect it
         if (base->isSelected())
@@ -475,6 +475,7 @@ void fileVpzView::onViewTreeMenu(const QPoint pos)
             newModel->dispNormal();
             model->addSubmodel(newModel);
             treeInsertModel(newModel, item);
+            diagSelectModel(mCurrentModel, true);
         }
         if (actCode == 2)
         {

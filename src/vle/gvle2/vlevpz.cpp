@@ -1083,19 +1083,25 @@ bool vleVpzModel::xgetXml(QDomDocument *doc, QDomElement *base)
 void vleVpzModel::fixWidgetSize(bool doResize)
 {
     // Test widget size and update if if needed
+    int szTitleText   = 0;
     int szInPortText  = 0;
     int szOutPortText = 0;
     int szInPortHeight  = 0;
     int szOutPortHeight = 0;
     int itemHeight;
 
+    // Compute the model name length (in pixels)
+    QFontMetrics fmTitle = QFontMetrics( mTitle.font() );
+    szTitleText = fmTitle.width( mName );
+
+    QFontMetrics fmPorts = QFontMetrics(mPainterFont);
+
     // Compute the text length (in pixels) of the longest input port name
-    QFontMetrics fm = QFontMetrics(mPainterFont);
     QListIterator<vleVpzPort*> inItems(mInPorts);
     while( inItems.hasNext() )
     {
         vleVpzPort *item = inItems.next();
-        int size = fm.width( item->getName() );
+        int size = fmPorts.width( item->getName() );
         if (size > szInPortText)
             szInPortText = size;
         // Compute port height
@@ -1108,7 +1114,7 @@ void vleVpzModel::fixWidgetSize(bool doResize)
     while( outItems.hasNext() )
     {
         vleVpzPort *item = outItems.next();
-        int size = fm.width( item->getName() );
+        int size = fmPorts.width( item->getName() );
         if (size > szOutPortText)
             szOutPortText = size;
         // Compute port height
@@ -1117,6 +1123,8 @@ void vleVpzModel::fixWidgetSize(bool doResize)
             szOutPortHeight = itemHeight;
     }
     // Update widget width if in or out port name is too large
+    if (mWidgetWidth < (szTitleText + 12) )
+        mWidgetWidth = szTitleText + 12;
     if (mWidgetWidth < (szInPortText + 12 + 20) )
         mWidgetWidth = szInPortText + 34;
     if (mWidgetWidth < (szOutPortText + 12 + 20) )
@@ -1131,7 +1139,7 @@ void vleVpzModel::fixWidgetSize(bool doResize)
     if (doResize)
     {
         setGeometry(mWidgetX-2, mWidgetY-2, mWidgetWidth+2, mWidgetHeight+16);
-        mTitle.setGeometry(mSettingCorner, mWidgetHeight+3, mWidgetX, 12);
+        mTitle.setGeometry(mSettingCorner, mWidgetHeight+3, mWidgetWidth, 12);
     }
 }
 
@@ -1199,6 +1207,7 @@ void vleVpzModel::setName(QString name)
     mName = name;
     // Update the title Label
     mTitle.setText(mName);
+    fixWidgetSize(true);
     // Mark the model as altered
     mIsAltered = true;
 }
@@ -1273,7 +1282,7 @@ void vleVpzModel::dispNormal()
     setGeometry(mWidgetX-2, mWidgetY-2, mWidgetWidth+2, mWidgetHeight+16);
 
     // Put the title at the bottom
-    mTitle.setGeometry(0, mWidgetHeight+3, mWidgetX, 12);
+    mTitle.setGeometry(0, mWidgetHeight+3, mWidgetWidth, 12);
 
     // Clear the maximized flag
     mIsMaximized = false;

@@ -46,7 +46,7 @@ public:
     void save();
     QWidget *getTool();
     void treeInsertModel(vleVpzModel *model, QTreeWidgetItem *base);
-    void diagSelectModel(vleVpzModel *base);
+    void diagSelectModel(vleVpzModel *base, bool force = FALSE);
     void treeUpdateModel(vleVpzModel *model, QString oldName, QString newName);
     void condUpdateTree(QList <vpzExpCondValue *> *valueList, QList<QTreeWidgetItem *> *widList);
     void condParamTreeSelectByValue(vpzExpCondValue *reqValue, QTreeWidgetItem *base);
