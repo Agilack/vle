@@ -17,12 +17,16 @@
 #include <QTableWidgetItem>
 #include "ui_filevpzrtool.h"
 #include "vlevpz.h"
+#include "widgetvpzproperty.h"
+#include "filevpzdynamics.h"
+#include "filevpzexpcond.h"
 #ifndef Q_MOC_RUN
 #include <vle/vpz/Vpz.hpp>
 #endif
 
 #define ROW_NAME 0
 #define ROW_DYN  1
+#define ROW_EXP  2
 
 namespace Ui {
 class fileVpzView;
@@ -48,9 +52,6 @@ public:
     void treeInsertModel(vleVpzModel *model, QTreeWidgetItem *base);
     void diagSelectModel(vleVpzModel *base, bool force = FALSE);
     void treeUpdateModel(vleVpzModel *model, QString oldName, QString newName);
-    void condUpdateTree(QList <vpzExpCondValue *> *valueList, QList<QTreeWidgetItem *> *widList);
-    void condParamTreeSelectByValue(vpzExpCondValue *reqValue, QTreeWidgetItem *base);
-    void condValueShowDetail(vpzExpCondValue *value);
 
 public slots:
     void onTreeModelSelected();
@@ -58,36 +59,22 @@ public slots:
     void onFocusChanged(vleVpzModel *model);
     void onModelDblClick(vleVpzModel *model);
     void onPropertyChanged(QTableWidgetItem *item);
-    void onConditionTreeSelected();
-    void onConditionTreeMenu(const QPoint pos);
-    void onConditionChanged(QTreeWidgetItem *item, int column);
-    void onCondParamTreeSelected();
-    void onCondParamTreeMenu(const QPoint pos);
-    void onCondParamListDblClick(QListWidgetItem *item);
-    void onCondParamListMenu(const QPoint pos);
-    void onParamTableChange();
-    void onCondParamTableDblClick(int row, int col);
-    void onCondParamTableMenu(const QPoint pos);
-    void onParamTextChange();
-    void onCondParamCancel();
-    void onCondParamSave();
-
-private:
-    void paramTreeUpdateList(vpzExpCondValue *value);
-    void paramTreeUpdateTable(vpzExpCondValue *value);
-    void paramTreeUpdateText(vpzExpCondValue *value);
+    void onPropertySelected(int cr, int cc, int pr, int pc);
+    void onPropertyMode(bool isSelected);
+    void onTabClose(int index);
+    void onAddModelerTab(vleVpzModel *model);
 
 private:
     bool             mUseSim;
     Ui::fileVpzView *ui;
     Ui::fileVpzRtool*uiTool;
+    FileVpzDynamics *mDynamicsTab;
+    FileVpzExpCond  *mExpCondTab;
     vleVpz          *mVpz;
     QWidget         *mWidgetTool;
     QList<QTreeWidgetItem *> mViewsItems;
     vleVpzModel     *mCurrentModel;
-private:
-    QTreeWidgetItem *mCondEdition;
-    QMenu           *mCondTreeContextMenu;
+
 private:
     QGraphicsScene   mScene;
 };

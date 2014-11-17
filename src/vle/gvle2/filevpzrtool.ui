@@ -43,6 +43,9 @@
    </item>
    <item>
     <widget class="QStackedWidget" name="stackProperty">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
      <widget class="QWidget" name="tabBlank"/>
      <widget class="QWidget" name="tabModelProperty">
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -79,7 +82,7 @@
           <bool>true</bool>
          </property>
          <property name="rowCount">
-          <number>2</number>
+          <number>3</number>
          </property>
          <property name="columnCount">
           <number>2</number>
@@ -96,6 +99,7 @@
          <attribute name="verticalHeaderHighlightSections">
           <bool>false</bool>
          </attribute>
+         <row/>
          <row/>
          <row/>
          <column>
@@ -128,6 +132,9 @@
           <property name="text">
            <string>Dynamic</string>
           </property>
+          <property name="textAlignment">
+           <set>AlignLeft|AlignTop</set>
+          </property>
           <property name="flags">
            <set>ItemIsSelectable|ItemIsEnabled</set>
           </property>
@@ -138,6 +145,17 @@
           </property>
           <property name="flags">
            <set>ItemIsSelectable|ItemIsEditable|ItemIsDragEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
+          </property>
+         </item>
+         <item row="2" column="0">
+          <property name="text">
+           <string>Conditions</string>
+          </property>
+          <property name="textAlignment">
+           <set>AlignLeft|AlignTop</set>
+          </property>
+          <property name="flags">
+           <set>ItemIsSelectable|ItemIsEnabled</set>
           </property>
          </item>
         </widget>

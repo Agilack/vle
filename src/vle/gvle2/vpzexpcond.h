@@ -102,6 +102,7 @@ public:
     bool    xSave(QDomDocument *doc, QDomElement *baseNode);
     vpzExpCondValue* createValue(vpzExpCondValue::ValueType type);
     bool    removeValue(vpzExpCondValue *value);
+    vpzExpCondValue *getValue();
     QList <vpzExpCondValue *> *getValues()
     {
         return &mValues;
@@ -122,6 +123,7 @@ public:
     void    xLoadNode(const QDomNode &node);
     void    addPort(vpzExpCondPort *newPort);
     bool    removePort(vpzExpCondPort *port);
+    vpzExpCondPort *getPort(QString name);
     QList <vpzExpCondPort *> *getPorts()
     {
         return &mPorts;

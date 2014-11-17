@@ -1,3 +1,11 @@
+/*
+ * This file is part of VLE, a framework for multi-modeling, simulation
+ * and analysis of complex dynamical systems.
+ * http://www.vle-project.org
+ *
+ * Copyright (c) 2014 INRA
+ *
+ */
 #ifndef GVLE2WIN_H
 #define GVLE2WIN_H
 
@@ -11,6 +19,11 @@
 #include <QSettings>
 #include <QTimer>
 
+#include "vlepackage.h"
+#include "pluginmodelerview.h"
+
+#include "plugin_cond.h"
+#include "plugin_modeler.h"
 #include "plugin_sim.h"
 
 #ifndef Q_MOC_RUN
@@ -18,6 +31,7 @@
 #include <vle/utils/Path.hpp>
 #include <vle/utils/Package.hpp>
 #include <vle/utils/Preferences.hpp>
+#include <vle/utils/Template.hpp>
 #endif
 
 #define QTVPZ 1
@@ -35,9 +49,14 @@ public:
     ~GVLE2Win();
 
 protected:
-    void loadSimulationPluggins();
+    void loadPlugins();
+    void loadExpCondPlugins   (PluginExpCond   *plugin);
+    void loadModelerPlugins   (PluginModeler   *plugin, QString fileName);
+    void loadSimulationPlugins(PluginSimulator *plugin, QString fileName);
     void showEvent(QShowEvent *event);
     void closeEvent(QCloseEvent *event);
+    pluginModelerView *openModeler(QString filename);
+    void loadModelerClasses(pluginModelerView *modeler);
 
 private slots:
     void onNewProject();
@@ -63,11 +82,12 @@ private slots:
     void projectConfigureTimer();
     void projectBuildTimer();
     void projectInstallTimer();
-
+    void onOpenModeler();
+    void onNewModelerClass();
+    void onRefreshFiles();
 
 private:
     Ui::GVLE2Win *ui;
-    bool               mOpenedPackage;
     Logger           * mLogger;
     QTimer           * mTimer;
     WidgetProjectTree* mProjectTree;
@@ -78,6 +98,9 @@ private:
     QList <QString>    mSimulators;
     PluginSimulator  * mCurrentSim;
     QPluginLoader    * mCurrentSimPlugin;
+private:
+    QList <QString>    mModelers;
+    QList<QPluginLoader *> mModelerPlugins;
 
 protected:
     void newProject(QString pathName);
@@ -93,8 +116,8 @@ private:
     bool tabClose(int index);
     bool closeProject();
 private:
+    vlePackage         *mPackage;
     vle::utils::Package mCurrPackage;
-    QString             mProjectPath;
 };
 
 #endif // GVLE2WIN_H

@@ -6,8 +6,8 @@
  * Copyright (c) 2014 INRA
  *
  */
-#ifndef PLUGIN_SIM_H
-#define PLUGIN_SIM_H
+#ifndef PLUGIN_COND_H
+#define PLUGIN_COND_H
 
 #include <QObject>
 #include <QString>
@@ -15,12 +15,7 @@
 #include <vle/gvle2/logger.h>
 #include <vle/gvle2/vlevpz.h>
 
-#ifndef Q_MOC_RUN
-#include <vle/utils/Package.hpp>
-#include <vle/vpz/Vpz.hpp>
-#endif
-
-class PluginSimulator
+class PluginExpCond
 {
 public:
     virtual QString  getname()   = 0;
@@ -32,9 +27,8 @@ public:
     virtual void  setLogger(Logger *logger) = 0;
     virtual void  setVpz(vleVpz *vpz) = 0;
     virtual void *getVpz() = 0;
-    virtual void  setPackage(vle::utils::Package *pkg) = 0;
 };
 
-Q_DECLARE_INTERFACE(PluginSimulator, "fr.inra.vle.gvle2.PluginSimulator/1.0")
+Q_DECLARE_INTERFACE(PluginExpCond, "fr.inra.vle.gvle2.PluginExpCond/1.0")
 
-#endif // PLUGIN_SIM_H
+#endif // PLUGIN_COND_H

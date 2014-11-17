@@ -21,6 +21,7 @@
 #include <QDomElement>
 #include <QDomNamedNodeMap>
 #include <QXmlDefaultHandler>
+#include "vlepackage.h"
 #include "vlevpzconn.h"
 #include "vlevpzdynamic.h"
 #include "vlevpzport.h"
@@ -30,6 +31,7 @@
 #undef USE_GRAPHICVIEW
 
 class vleVpzModel;
+class vlePackage;
 
 namespace Ui {
 class fileVpzTooltip;
@@ -44,9 +46,13 @@ public:
     QString        getFilename();
     QString        getBasePath();
     void           setBasePath(const QString path);
+    vlePackage    *getPackage();
+    void           setPackage(vlePackage *package);
     bool           isAltered();
     void           save();
     vleVpzDynamic *getDynamic(QString name);
+    void           addDynamic(vleVpzDynamic *dynamic);
+    void           removeDynamic(vleVpzDynamic *dynamic);
     QList <vleVpzDynamic *> *getDynamicsList()
     {
         return &mDynamics;
@@ -55,9 +61,16 @@ public:
 public slots:
     void focusChange(vleVpzModel *model);
     void enterModel(vleVpzModel *model);
+    void addModeler(QString name);
+    void addModelerDynamic(vleVpzModel *model, QString lib);
+    void openModeler();
+
 signals:
     void sigFocus(vleVpzModel *model);
     void sigEnterModel(vleVpzModel *model);
+    void sigConditionsChanged();
+    void sigDynamicsChanged();
+    void sigOpenModeler(vleVpzModel *model);
 
 protected:
     bool startElement(const QString &namespaceURI,
@@ -79,6 +92,7 @@ private:
     bool xSaveExperiments(QDomDocument *doc, QDomElement *baseNode);
     bool xSaveExpCondition(QDomDocument *doc, QDomNode *baseNode, vpzExpCond *cond);
     bool xSaveExpCondValue(QDomDocument *doc, QDomNode *baseNode, vpzExpCondValue *value);
+    int  removeModelDynamic(vleVpzModel *model, vleVpzDynamic *dynamic, bool recurse = false);
 
 public:
     vpzExpCond *     addCondition(QString name = "");
@@ -86,6 +100,8 @@ public:
     vpzExpCondValue *addConditionValue(vpzExpCondPort *port, vpzExpCondValue::ValueType type = vpzExpCondValue::TypeUnknown);
     bool             delConditionValue(vpzExpCondPort *port, vpzExpCondValue *value);
     vpzExpCond *     getCondition(QString name);
+    vpzExpCond *     getFirstCondition();
+    vpzExpCond *     getNextCondition();
     QList <vpzExpCond *> *getConditions()
     {
         return &mConditions;
@@ -101,6 +117,8 @@ private:
     QString mExpDuration;
     QString mExpCombination;
     QString mExpName;
+    vlePackage *mPackage;
+    int                     mConditionIteratorIndex;
     QList <vleVpzDynamic *> mDynamics;
     QList <vpzExpCond    *> mConditions;
     QList <void          *> mViews;
@@ -122,6 +140,10 @@ public:
     void addSubmodel(vleVpzModel *model);
     void delSubmodel(vleVpzModel *model);
     int  countSubmodels();
+    vleVpzModel *getSubmodelAt(int i)
+    {
+        return mSubmodels.at(i);
+    }
     QList <vleVpzModel *> *getSubmodels()
     {
         return &mSubmodels;
@@ -139,15 +161,29 @@ public:
         return &mConnections;
     }
     vleVpzDynamic *getDynamic();
+    void setDynamic(QString dynamicName);
+    void removeDynamic();
 
     void addCondition(vpzExpCond *cond);
     void removeCondition(vpzExpCond *cond);
     QString getConditionStringList();
+    bool hasCondition(vpzExpCond *cond)
+    {
+        int i;
+        for (i = 0; i < mConditions.count(); i++)
+        {
+            if (mConditions.at(i) == cond)
+                return true;
+        }
+        return false;
+    }
 
     QString getObservables()
     {
         return mObservables;
     }
+
+    bool hasModeler();
 
     bool isAltered();
     void fixWidgetSize(bool doResize = false);
@@ -184,6 +220,9 @@ protected:
 signals:
      void sigFocus(vleVpzModel *model);
      void sigDblClick(vleVpzModel *model);
+     void sigAddModeler(QString name);
+     void sigOpenModeler();
+
 public slots:
      void contextMenu(const QPoint & pos);
      void contextMenu(const QPoint & pos, vleVpzPort *port);
@@ -235,6 +274,12 @@ private:
     int     mSettingLine;
     int     mSettingCorner;
     int     mSettingFontSize;
+
+public:
+    sourceCpp *getModelerClass();
+
+private:
+    sourceCpp *mModelerClass;
 };
 
 #endif // VLEVPZ_H

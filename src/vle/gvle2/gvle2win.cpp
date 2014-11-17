@@ -1,3 +1,11 @@
+﻿/*
+ * This file is part of VLE, a framework for multi-modeling, simulation
+ * and analysis of complex dynamical systems.
+ * http://www.vle-project.org
+ *
+ * Copyright (c) 2014 INRA
+ *
+ */
 #include <QFileDialog>
 #include <QStyleFactory>
 #include <QActionGroup>
@@ -5,6 +13,7 @@
 
 #include "gvle2win.h"
 #include "ui_gvle2win.h"
+#include "plugin_modeler.h"
 #include "plugin_sim.h"
 #include "help.h"
 #include "aboutbox.h"
@@ -21,10 +30,12 @@ GVLE2Win::GVLE2Win(QWidget *parent) :
     mTimer = 0;
     mLogger = 0;
     mSimOpened = false;
-    mOpenedPackage = false;
     mCurrentSimPlugin = 0;
+    mPackage = 0;
     // VLE init
     mCurrPackage.refreshPath();
+    //
+    mModelers.clear();
 
     // GUI init
     ui->setupUi(this);
@@ -74,7 +85,8 @@ GVLE2Win::GVLE2Win(QWidget *parent) :
     sizes.append(200);
     ui->splitter->setSizes(sizes);
 
-    loadSimulationPluggins();
+    loadPlugins();
+    ui->menuSelectSimulator->setEnabled(true);
 }
 
 GVLE2Win::~GVLE2Win()
@@ -114,11 +126,8 @@ void GVLE2Win::showEvent(QShowEvent *event)
     statusWidgetClose();
 }
 
-void GVLE2Win::loadSimulationPluggins()
+void GVLE2Win::loadPlugins()
 {
-    //qDebug() << QCoreApplication::libraryPaths();
-    // QCoreApplication::addLibraryPath
-
     QString basePath;
     std::string defPluginPath = vle::utils::Path::path().getHomeFile("plugins");
     QVariant path = mSettings->value("Plugins/path", defPluginPath.c_str());
@@ -133,24 +142,64 @@ void GVLE2Win::loadSimulationPluggins()
     {
         QPluginLoader loader(pluginsDir.absoluteFilePath(fileName) );
         QObject *plugin = loader.instance();
-        if (loader.isLoaded())
-        {
-            PluginSimulator *sim = qobject_cast<PluginSimulator *>(plugin);
-            if (sim) {
-                qDebug() << "    " << sim->getname();
-                mLogger->log(QString("Load simulator pluggin : %1").arg(sim->getname()));
-                mSimulators << pluginsDir.absoluteFilePath(fileName);
-                // Update Menu
-                QAction *newAct = ui->menuSelectSimulator->addAction(sim->getname());
-                newAct->setCheckable(true);
-                newAct->setActionGroup(mMenuSimGroup);
-                newAct->setObjectName(sim->getname());
-                newAct->setData(pluginsDir.absoluteFilePath(fileName));
-                QObject::connect(newAct, SIGNAL(toggled(bool)), this, SLOT(onSelectSimulator(bool)));
-            }
-        }
+        if ( ! loader.isLoaded())
+            continue;
+
+        QString absFileName = pluginsDir.absoluteFilePath(fileName);
+
+        PluginExpCond *expcond = qobject_cast<PluginExpCond *>(plugin);
+        if (expcond)
+            loadExpCondPlugins(expcond);
+
+        PluginModeler *modeler = qobject_cast<PluginModeler *>(plugin);
+        if (modeler)
+            loadModelerPlugins(modeler, absFileName);
+
+        PluginSimulator *sim = qobject_cast<PluginSimulator *>(plugin);
+        if (sim)
+            loadSimulationPlugins(sim, absFileName);
+
+        loader.unload();
     }
-    ui->menuSelectSimulator->setEnabled(true);
+}
+
+void GVLE2Win::loadExpCondPlugins(PluginExpCond *plugin)
+{
+    qDebug() << " - Found expcond plugin: " << plugin->getname();
+}
+
+void GVLE2Win::loadModelerPlugins(PluginModeler *plugin, QString fileName)
+{
+    qDebug() << " - Found modeler plugin: " << plugin->getname();
+    mModelers.append(fileName);
+
+    QMenu *newPluginMenu = ui->menuModeling->addMenu(plugin->getname());
+
+    QAction *newAct = newPluginMenu->addAction(tr("New class"));
+    newAct->setProperty("fileName", fileName);
+    QAction *updAct = newPluginMenu->addAction(tr("Update"));
+    updAct->setEnabled(false);
+    newPluginMenu->addSeparator();
+    QAction *openAct = newPluginMenu->addAction(tr("Open"));
+    openAct->setProperty("fileName", fileName);
+
+    QObject::connect(newAct,  SIGNAL(triggered()), this, SLOT(onNewModelerClass()));
+    QObject::connect(openAct, SIGNAL(triggered()), this, SLOT(onOpenModeler()));
+}
+
+void GVLE2Win::loadSimulationPlugins(PluginSimulator *sim, QString fileName)
+{
+    qDebug() << " - Found simulation plugin: " << sim->getname();
+    mLogger->log(QString("Load simulator pluggin : %1").arg(sim->getname()));
+    mSimulators << fileName;
+
+    // Update Menu
+    QAction *newAct = ui->menuSelectSimulator->addAction(sim->getname());
+    newAct->setCheckable(true);
+    newAct->setActionGroup(mMenuSimGroup);
+    newAct->setObjectName(sim->getname());
+    newAct->setData(fileName);
+    QObject::connect(newAct, SIGNAL(toggled(bool)), this, SLOT(onSelectSimulator(bool)));
 }
 
 /**
@@ -222,11 +271,14 @@ void GVLE2Win::newProject(QString pathName)
     QDir    dir(pathName);
     std::string basename = dir.dirName().toStdString ();
 
-    if (mOpenedPackage) {
+    if (mPackage) {
         if ( not closeProject()) {
             return;
         }
     }
+
+    mPackage = new vlePackage(pathName);
+    mPackage->setStdPackage( &mCurrPackage );
 
     mLogger->log(QString("New Project %1").arg(dir.dirName()));
 
@@ -245,9 +297,7 @@ void GVLE2Win::newProject(QString pathName)
 
     ui->actionCloseProject->setEnabled(true);
     ui->menuProject->setEnabled(true);
-
-    mOpenedPackage = true;
-    mProjectPath = dir.dirName();
+    ui->menuModeling->setEnabled(true);
 }
 
 /**
@@ -256,24 +306,22 @@ void GVLE2Win::newProject(QString pathName)
  */
 void GVLE2Win::openProject(QString pathName)
 {
-    QDir    dir(pathName);
-    std::string basename = dir.dirName().toStdString ();
-
-    if (mOpenedPackage) {
+    if (mPackage) {
         if ( not closeProject()) {
             return;
         }
     }
+    mPackage = new vlePackage(pathName);
+    mPackage->setStdPackage( &mCurrPackage );
+    // Register modelers
+    for (int i = 0; i < mModelers.count(); i++)
+        mPackage->addModeler(mModelers.at(i));
 
-    mLogger->log(QString("Open Project %1").arg(dir.dirName()));
+    mLogger->log(QString("Open Project %1").arg(mPackage->getName()));
 
     // Update window title
-    setWindowTitle("GVLE - " + dir.dirName());
+    setWindowTitle("GVLE - " + mPackage->getName());
 
-    dir.cdUp();
-    QDir::setCurrent( dir.path() );
-
-    mCurrPackage.select(basename);
     treeProjectUpdate();
 
     // Update the recent projects
@@ -282,9 +330,7 @@ void GVLE2Win::openProject(QString pathName)
 
     ui->actionCloseProject->setEnabled(true);
     ui->menuProject->setEnabled(true);
-
-    mOpenedPackage = true;
-    mProjectPath = dir.dirName();
+    ui->menuModeling->setEnabled(true);
 }
 
 bool GVLE2Win::closeProject()
@@ -320,7 +366,9 @@ bool GVLE2Win::closeProject()
 
     mLogger->log(QString("Project closed"));
 
-    mOpenedPackage = false;
+    delete mPackage;
+    mPackage = 0;
+
     return true;
 }
 
@@ -485,13 +533,13 @@ void GVLE2Win::projectInstallTimer()
 void GVLE2Win::onLaunchSimulation()
 {
     QWidget *w = ui->tabWidget->currentWidget();
-    QVariant tabType = w->property("type");
-    if (tabType.toString().compare("vpz"))
-        return;
-    if (mSimOpened)
+
+    fileVpzView *vpzView = qobject_cast<fileVpzView *>(w);
+    if (vpzView == 0)
         return;
 
-    fileVpzView *vpzView = (fileVpzView *)w;
+    if (mSimOpened)
+        return;
 
     if ( ! ui->actionSimNone->isChecked())
     {
@@ -988,7 +1036,8 @@ void GVLE2Win::onTreeDblClick(QTreeWidgetItem *item, int column)
 #ifdef QTVPZ
     vleVpz *selVpz;
     selVpz = new vleVpz(fileName);
-    selVpz->setBasePath(mProjectPath);
+    selVpz->setBasePath(mPackage->getName());
+    selVpz->setPackage(mPackage);
 #else
     vle::vpz::Vpz *selectedVpz;
     selectedVpz = new vle::vpz::Vpz(fileName.toStdString());
@@ -1035,4 +1084,150 @@ void GVLE2Win::onTreeDblClick(QTreeWidgetItem *item, int column)
         ui->rightStack->setCurrentWidget(newRTool);
         newTab->setProperty("wTool", nid);
     }
+}
+
+void GVLE2Win::onRefreshFiles()
+{
+    qDebug() << "GVLE2Win::onRefreshFiles()";
+    treeProjectUpdate();
+}
+
+/**
+ * @brief GVLE2Win::openModeler
+ *        Open (or return existing) modeler view tab
+ *
+ */
+pluginModelerView *GVLE2Win::openModeler(QString filename)
+{
+    pluginModelerView *wview;
+
+    for (int i = (ui->tabWidget->count() - 1); i >= 0; i--)
+    {
+        QWidget *w = ui->tabWidget->widget(i);
+        wview = qobject_cast<pluginModelerView *>(w);
+        if (wview == 0)
+            continue;
+        if (wview->getFilename() == filename)
+            return wview;
+    }
+
+    wview = new pluginModelerView();
+    wview->setPlugin(filename);
+    wview->setPackage(mPackage);
+
+    QObject::connect(wview, SIGNAL(refreshFiles()),
+                     this,  SLOT  (onRefreshFiles()));
+
+    QString tabName = QString("Modeler: %1").arg( wview->getName() );
+    int n = ui->tabWidget->addTab(wview, tabName);
+    ui->tabWidget->setCurrentIndex(n);
+    wview->show();
+
+    loadModelerClasses(wview);
+
+    return wview;
+}
+
+// Todo : this method must be move to a "package" class
+void GVLE2Win::loadModelerClasses(pluginModelerView *modeler)
+{
+    QTreeWidget     *tree = ui->treeProject;
+    QTreeWidgetItem *item;
+    for (int i = 0; i < tree->topLevelItemCount(); i++)
+    {
+        item = tree->topLevelItem(i);
+        if (item->text(0) == "src")
+            break;
+        item = 0;
+    }
+    if (item == 0)
+        return;
+
+    QString pluginName = modeler->getName();
+
+    QDir dir(mCurrPackage.name().c_str());
+    dir.cd("src");
+
+    QTreeWidgetItem *fileItem;
+    for (int i = 0; i < item->childCount(); i++)
+    {
+        fileItem = item->child(i);
+        QString fname = dir.absoluteFilePath(fileItem->text(0));
+
+        vle::utils::Template tpl;
+        try {
+            std::string tplPlugin, packagename, conf;
+
+            tpl.open(fname.toStdString());
+            tpl.tag(tplPlugin, packagename, conf);
+
+            qDebug() << "TAG found into file: " << fileItem->text(0);
+            qDebug() << "  - Plugin: " << QString( tplPlugin.c_str() );
+            if (pluginName != QString(tplPlugin.c_str()))
+                continue;
+            QString tplConf = QString( conf.c_str() );
+            QStringList confEntries = tplConf.split(";");
+            qDebug() << "  - Conf  : " << tplConf;
+
+            // Get the class name from conf
+            QStringList classNameEntry = confEntries.filter("class:");
+            QString className = classNameEntry.at(0).split(":").at(1);
+
+            modeler->addClass(className, fname);
+        } catch(...) {
+            continue;
+        }
+    }
+}
+
+/**
+ * @brief GVLE2Win::onOpenModeler (slot)
+ *        Called on "Open" menu of a Modeler plugin
+ *
+ */
+void GVLE2Win::onOpenModeler()
+{
+    // Search the caller menu (which plugin)
+    QObject *senderObject = QObject::sender();
+    QAction *senderAction = qobject_cast<QAction *>(senderObject);
+    // This function -must- be called by a QAction signal
+    if (senderAction == 0)
+        return;
+
+    QVariant varFileName = senderAction->property("fileName");
+    if ( ! varFileName.isValid())
+        return;
+
+    QString fileName = varFileName.toString();
+
+    pluginModelerView *tab;
+    tab = openModeler(fileName);
+
+    tab->showSummary();
+}
+
+/**
+ * @brief GVLE2Win::onNewModelerClass (slot)
+ *        Called on "New class" menu of a Modeler plugin
+ *
+ */
+void GVLE2Win::onNewModelerClass()
+{
+    // Search the caller menu (which plugin)
+    QObject *senderObject = QObject::sender();
+    QAction *senderAction = qobject_cast<QAction *>(senderObject);
+    // This function -must- be called by a QAction signal
+    if (senderAction == 0)
+        return;
+
+    QVariant varFileName = senderAction->property("fileName");
+    if ( ! varFileName.isValid())
+        return;
+
+    QString fileName = varFileName.toString();
+
+    pluginModelerView *tab;
+    tab = openModeler(fileName);
+
+    tab->addNewTab();
 }

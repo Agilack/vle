@@ -10,11 +10,9 @@ vpzExpCond::vpzExpCond(vleVpz *vpz)
 
 vpzExpCond::~vpzExpCond()
 {
-    qDebug() << "~vpzExpCond()";
     while (mLinkedModels.length())
     {
         vleVpzModel *model = mLinkedModels.takeLast();
-        qDebug() << "  - Remove link " << model->getName();
         model->removeCondition(this);
     }
 
@@ -38,6 +36,17 @@ void vpzExpCond::addPort(vpzExpCondPort *newPort)
 {
     newPort->setParent(this);
     mPorts.append(newPort);
+}
+
+vpzExpCondPort *vpzExpCond::getPort(QString name)
+{
+    for (int i = 0; i < mPorts.length(); i++)
+    {
+        vpzExpCondPort *item = mPorts.at(i);
+        if (item->getName() == name)
+            return item;
+    }
+    return 0;
 }
 
 bool vpzExpCond::removePort(vpzExpCondPort *port)
@@ -110,6 +119,14 @@ vpzExpCondValue* vpzExpCondPort::createValue(vpzExpCondValue::ValueType type)
     mValues.append(newVal);
 
     return newVal;
+}
+
+vpzExpCondValue* vpzExpCondPort::getValue()
+{
+    if (mValues.count() == 0)
+        return 0;
+
+    return mValues.at(0);
 }
 
 bool vpzExpCondPort::removeValue(vpzExpCondValue *value)

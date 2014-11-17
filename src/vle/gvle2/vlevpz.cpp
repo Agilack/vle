@@ -10,6 +10,7 @@
 #include <QClipboard>
 #include <QFlags>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPalette>
 #include <QtDebug>
 
@@ -45,6 +46,16 @@ QString vleVpz::getBasePath(void)
 void vleVpz::setBasePath(const QString path)
 {
     mPath = path;
+}
+
+vlePackage *vleVpz::getPackage()
+{
+    return mPackage;
+}
+
+void vleVpz::setPackage(vlePackage *package)
+{
+    mPackage = package;
 }
 
 /**
@@ -99,6 +110,61 @@ vleVpzDynamic *vleVpz::getDynamic(QString name)
     }
 
     return 0;
+}
+
+/**
+ * @brief vleVpz::addDynamic
+ *        Add a new Dynamic
+ *
+ */
+void vleVpz::addDynamic(vleVpzDynamic *dynamic)
+{
+    if (dynamic)
+        mDynamics.prepend(dynamic);
+}
+
+/**
+ * @brief vleVpz::removeDynamic
+ *        Remove an existing Dynamic
+ *
+ */
+void vleVpz::removeDynamic(vleVpzDynamic *dynamic)
+{
+    // Remove the links of models with the dyncmic
+    removeModelDynamic(mRootModel, dynamic, true);
+
+    // Remove from the VPZ
+    mDynamics.removeAll(dynamic);
+
+    // Then delete it
+    delete dynamic;
+}
+
+/**
+ * @brief vleVpz::removeModelDynamic
+ *        Remove  link(s) of model(s) with a dynamic before deleting it
+ *
+ */
+int vleVpz::removeModelDynamic(vleVpzModel *model, vleVpzDynamic *dynamic, bool recurse)
+{
+    int count = 0;
+
+    // If the specified model use the dynamic
+    if (model->getDynamic() == dynamic)
+    {
+        // Remove it
+        model->removeDynamic();
+        count ++;
+    }
+
+    // If the recurse flag is set, call this method for all submodels
+    if (recurse)
+    {
+        for (int i = 0; i < model->countSubmodels(); i++)
+            count += removeModelDynamic(model->getSubmodelAt(i), dynamic, recurse);
+    }
+
+    return count;
 }
 
 /**
@@ -167,6 +233,126 @@ vpzExpCond * vleVpz::getCondition(QString name)
     return 0;
 }
 
+vpzExpCond * vleVpz::getFirstCondition()
+{
+    mConditionIteratorIndex = 0;
+    if (mConditions.count())
+        return mConditions.at(mConditionIteratorIndex);
+    else
+        return 0;
+}
+vpzExpCond *vleVpz::getNextCondition()
+{
+    if (mConditions.count() > (mConditionIteratorIndex + 1))
+    {
+        mConditionIteratorIndex++;
+        return mConditions.at(mConditionIteratorIndex);
+    }
+    else
+        return 0;
+}
+
+/**
+ * @brief vleVpz::addModeler (slot)
+ *        Called when a model must be linked with a modeler
+ *
+ */
+void vleVpz::addModeler(QString name)
+{
+    // Search the sender model
+    QObject *senderObject = QObject::sender();
+    vleVpzModel *model = qobject_cast<vleVpzModel *>(senderObject);
+    if (model == 0)
+        return;
+
+    sourceCpp *classFile = model->getModelerClass();
+    if (classFile == 0)
+        return;
+
+    PluginModeler *modeler = classFile->getModeler();
+
+    QString condName = name + model->getName();
+    vpzExpCond *exp = addCondition(condName);
+
+    modeler->initExpCond(exp, classFile);
+    model->addCondition(exp);
+
+    // Inform upper layers that a new condition has been created
+    emit sigConditionsChanged();
+
+    addModelerDynamic(model, name);
+    // Inform upper layers that dynamic has been changed
+    emit sigDynamicsChanged();
+
+    emit sigOpenModeler(model);
+}
+
+/**
+ * @brief vleVpz::addModelerDynamic
+ *        Part of the add-modeler process - Update the model Dynamic
+ *
+ */
+void vleVpz::addModelerDynamic(vleVpzModel *model, QString lib)
+{
+    // First, check if the model has already a dynamic
+    vleVpzDynamic *dyn = model->getDynamic();
+    if (dyn)
+    {
+        // Test if the current dynamic can be used with this modeler
+        if ((dyn->getPackage() == mPackage->getName()) &&
+            (dyn->getLibrary() == lib))
+            // Yes, model has already a valid dynamic, nothing to do
+            return;
+
+        QMessageBox msgBox;
+        msgBox.setText(tr("The current model Dynamic will be removed. Continue ?"));
+        msgBox.addButton(QMessageBox::Yes);
+        msgBox.addButton(QMessageBox::No);
+        int ret = msgBox.exec();
+        // If the user say "No", current dynamic stay unchanged
+        if (ret == QMessageBox::No)
+            return;
+        
+        model->removeDynamic();
+    }
+
+    // Second, search into the existing dynamics if one can be used
+    vleVpzDynamic *newDyn = 0;
+    for (int i = 0; i < mDynamics.count(); i++)
+    {
+        vleVpzDynamic *existingDyn = mDynamics.at(i);
+        if (existingDyn->getPackage() != mPackage->getName())
+            continue;
+        if (existingDyn->getLibrary() != lib)
+            continue;
+
+        // A dynamic with good Library and Package values found ! :)
+        newDyn = existingDyn;
+        break;
+    }
+
+    // If no dynamic available, create a new one
+    if (newDyn == 0)
+    {
+        QString dynName = "mod";
+        QString pkgName = mPackage->getName();
+
+        newDyn = new vleVpzDynamic(dynName, lib, pkgName);
+        addDynamic(newDyn);
+    }
+
+    model->setDynamic(newDyn->getName());
+}
+
+void vleVpz::openModeler()
+{
+    QObject *senderObject = QObject::sender();
+    vleVpzModel *model = qobject_cast<vleVpzModel *>(senderObject);
+    if (model == 0)
+        return;
+
+    emit sigOpenModeler(model);
+}
 
 /**
  * @brief vleVpz::save
@@ -650,6 +836,11 @@ vleVpzModel::vleVpzModel(vleVpz *parent)
                          mVpz, SLOT(focusChange(vleVpzModel*)));
         QObject::connect(this, SIGNAL(sigDblClick(vleVpzModel*)),
                          mVpz, SLOT(enterModel(vleVpzModel*)));
+
+        QObject::connect(this, SIGNAL(sigAddModeler(QString)),
+                         mVpz, SLOT  (addModeler(QString)) );
+        QObject::connect(this, SIGNAL(sigOpenModeler()),
+                         mVpz, SLOT  (openModeler()) );
     }
 
     mIsAltered = false;
@@ -678,6 +869,8 @@ vleVpzModel::vleVpzModel(vleVpz *parent)
     mPortInSel  = 0;
     mPortOutSel = 0;
 
+    mModelerClass = 0;
+
     setToolTip("Model");
 
     // Configure a custom context menu (called on right-click on model)
@@ -687,6 +880,7 @@ vleVpzModel::vleVpzModel(vleVpz *parent)
 
     setStyleSheet("background-color: transparent; color: rgb(0, 0, 255);");
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
     mTitle.setParent(this);
 }
 
@@ -767,10 +961,43 @@ int vleVpzModel::countSubmodels()
     return mSubmodels.length();
 }
 
+/**
+ * @brief vleVpzModel::getDynamic
+ *        Accessor for the Dynamic attribute of the model
+ *
+ */
 vleVpzDynamic *vleVpzModel::getDynamic()
 {
     return mDynamic;
 }
+
+/**
+ * @brief vleVpzModel::setDynamic
+ *        Set the current Dynamic of the model (selected by his name)
+ *
+ */
+void vleVpzModel::setDynamic(QString dynamicName)
+{
+    // Search the Dynamic into VPZ using specified name
+    vleVpzDynamic *dynamic = mVpz->getDynamic(dynamicName);
+
+    // If found, update the model
+    if (dynamic)
+        mDynamic = dynamic;
+    else
+        qDebug() << "Model " << mName << " try to use an unknown dynamic : " << dynamicName;
+}
+
+/**
+ * @brief vleVpzModel::removeDynamic
+ *        Remove the current Dynamic (if any)
+ *
+ */
+void vleVpzModel::removeDynamic()
+{
+    mDynamic = 0;
+}
+
 
 void vleVpzModel::addCondition(vpzExpCond *cond)
 {
@@ -839,11 +1066,7 @@ void vleVpzModel::xLoadNode(const QDomNode &node)
         QDomNode xDyn = attrMap.namedItem("dynamics");
         QString dynName = xDyn.nodeValue();
         if (mVpz)
-        {
-            mDynamic = mVpz->getDynamic(dynName);
-            if (mDynamic == 0)
-                qDebug() << "Model try to use an unknown dynamic " << dynName;
-        }
+            setDynamic(dynName);
     }
     if (attrMap.contains("conditions")) // Optional)
     {
@@ -1210,6 +1433,39 @@ void vleVpzModel::setName(QString name)
     fixWidgetSize(true);
     // Mark the model as altered
     mIsAltered = true;
+}
+
+bool vleVpzModel::hasModeler()
+{
+    QList<QString> expNameCandidate;
+    vlePackage * pkg = mVpz->getPackage();
+    int nb = pkg->getModelerClassCount();
+    for (int i = 0; i < nb; i++)
+    {
+        QString expName = pkg->getModelerClass(i);
+        expName += mName;
+        expNameCandidate.append(expName);
+    }
+
+    for (int i = 0; i < mConditions.count(); i++)
+    {
+        vpzExpCond *cond = mConditions.at(i);
+        if (expNameCandidate.contains( cond->getName() ) )
+        {
+            if (mModelerClass == 0)
+            {
+                // As candidate list is based on getModelerClass() ... list id are equals "n"
+                int n = expNameCandidate.indexOf( cond->getName() );
+                QString className = pkg->getModelerClass(n);
+
+                QString classFileName =  mVpz->getPackage()->getSrcFilePath(className + ".cpp");
+                mModelerClass = new sourceCpp(classFileName, mVpz->getPackage());
+            }
+
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -1825,6 +2081,29 @@ void vleVpzModel::contextMenu(const QPoint & pos, vleVpzPort *port)
     }
     else
     {
+        if ( ! hasModeler())
+        {
+            QMenu *modelerMenu = ctxMenu.addMenu(tr("Add Modeler"));
+
+            int nb = mVpz->getPackage()->getModelerClassCount();
+            for (int i = 0; i < nb; i++)
+            {
+                QString className = mVpz->getPackage()->getModelerClass(i);
+                QString pluginName = mVpz->getPackage()->getModelerClassPlugin(className);
+
+                QString menuLabel;
+                menuLabel = className + " (" + pluginName + ")";
+
+                lastAction = modelerMenu->addAction(menuLabel);
+                lastAction->setData(40 + i);
+            }
+        }
+        else
+        {
+            lastAction = ctxMenu.addAction(tr("Open Modeler"));
+            lastAction->setData(4);
+        }
+        ctxMenu.addSeparator();
         lastAction = ctxMenu.addAction(tr("Add input port"));  lastAction->setData(1);
         lastAction = ctxMenu.addAction(tr("Add output port")); lastAction->setData(2);
         lastAction = ctxMenu.addAction(tr("Remove port"));     lastAction->setData(3);
@@ -1892,6 +2171,23 @@ void vleVpzModel::contextMenu(const QPoint & pos, vleVpzPort *port)
                 break;
             }
 
+            // Menu "Modeler"
+            case 4:
+            {
+                emit sigOpenModeler();
+                break;
+            }
+
+            case 40 ... 50:
+            {
+                QString className = mVpz->getPackage()->getModelerClass(actCode - 40);
+                QString classFileName =  mVpz->getPackage()->getSrcFilePath(className + ".cpp");
+                mModelerClass = new sourceCpp(classFileName, mVpz->getPackage());
+
+                emit sigAddModeler(className);
+                break;
+            }
+
             case 11:
                 portConnect(port);
                 break;
@@ -1904,6 +2200,14 @@ void vleVpzModel::contextMenu(const QPoint & pos, vleVpzPort *port)
                 break;
         }
     }
+}
+
+sourceCpp *vleVpzModel::getModelerClass()
+{
+    if (mModelerClass == 0)
+        hasModeler();
+
+    return mModelerClass;
 }
 
 /**
