@@ -78,6 +78,10 @@ public:
     QString        getExpBegin() const;
     void           setExpBegin(const QString begin);
     /**
+     * @brief get <observables> tag from Vpz doc
+     */
+    QDomNode observablesFromDoc() const;
+    /**
      * @brief get <views> tag from Vpz doc
      */
     QDomNode viewsFromDoc() const;
@@ -111,12 +115,17 @@ public:
      * @brief get a new condition name not already in tag <conditions>
      * from the Vpz doc
      */
-     QString newCondNameToDoc() const;
-     /**
-      * @brief get a new port name for condition condName not already in tag
-      * <condition> from the Vpz doc
-      */
-     QString newCondPortNameToDoc(const QString& condName) const;
+    QString newCondNameToDoc() const;
+    /**
+     * @brief get a new port name for condition condName not already in tag
+     * <condition> from the Vpz doc
+     */
+    QString newCondPortNameToDoc(const QString& condName) const;
+    /**
+     * @brief get list of node with tag <port> tag from Vpz doc,
+     * for observable of name 'obsName'
+     */
+    QDomNodeList obsPortsListFromDoc(const QString& obsName) const;
     /**
      * @brief get list of node with tag <port> tag from Vpz doc,
      * for condition of name 'condName'
@@ -166,14 +175,30 @@ public:
             const QString& atom) const;
 
     /**
+     * @brief get list of node with tag <observable> tag from tag <observables>
+     */
+    QDomNodeList obssListFromObss(const QDomNode& node) const;
+
+    /**
      * @brief get list of node with tag <condition> tag from tag <conditions>
      */
     QDomNodeList condsListFromConds(const QDomNode& node) const;
 
     /**
+     * @brief get list of node with tag <port> tag from tag <observable>
+     */
+    QDomNodeList portsListFromObs(const QDomNode& node) const;
+
+    /**
      * @brief get list of node with tag <port> tag from tag <condition>
      */
     QDomNodeList portsListFromCond(const QDomNode& node) const;
+
+    /**
+     * @brief get <observable> tag from  tag <observables>
+     * which attribute 'name' is obsName
+     */
+    QDomNode obsFromObss(const QDomNode& node, const QString& obsName) const;
 
     /**
      * @brief get <condition> tag from  tag <conditions>
@@ -238,8 +263,11 @@ public:
      * and value is val
      */
     void setAttributeValue(QDomElement node, const QString& attrName,
-            const QString& val);
-
+			   const QString& val);
+    /**
+     * @brief get <observables> tag from <views> tag
+     */
+    QDomNode obsFromViews(QDomNode node) const;
     /**
      * @brief get <outputs> tag from <views> tag
      */
@@ -255,6 +283,12 @@ public:
      * @param the values to fill
      */
     void viewOutputNames(std::vector<std::string>& v) const;
+    /**
+     * @brief get the list of attribute values of 'name' of different <observable>
+     * in <experiment>/<views>/<observables>
+     * @param the values to fill
+     */
+    void viewObservableNames(std::vector<std::string>& v) const;
     /**
      * @brief get the list of attribute values of 'name' of different <view>
      * in <experiment>/<views>

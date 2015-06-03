@@ -202,6 +202,24 @@ void vleVpz::setExpBegin(const QString begin)
     docElem.setAttribute("begin", begin);
 }
 
+QDomNode
+vleVpz::obsFromViews(QDomNode node) const
+{
+    if (node.nodeName() != "views") {
+
+        qDebug() << ("Internal error in obsFromView (wrong main tag)");
+        return QDomNode();
+    }
+    QDomNodeList childs = node.childNodes();
+    for (unsigned int i=0; i < childs.length(); i++) {
+        QDomNode child = childs.item(i);
+        if (child.nodeName() == "observables") {
+            return child;
+        }
+    }
+    qDebug() << ("Internal error in obsFromView (observables not found)");
+    return QDomNode();
+}
 
 QDomNode
 vleVpz::outputsFromViews(QDomNode node)
@@ -376,6 +394,13 @@ vleVpz::newCondPortNameToDoc(const QString& condName) const
 }
 
 QDomNodeList
+vleVpz::obsPortsListFromDoc(const QString& obsName) const
+{
+    return portsListFromObs(obsFromObss(obsFromViews(viewsFromDoc()),
+                                        obsName));
+}
+
+QDomNodeList
 vleVpz::portsListFromDoc(const QString& condName) const
 {
     return portsListFromCond(condFromConds(condsFromDoc(), condName));
@@ -386,7 +411,6 @@ vleVpz::portFromDoc(const QString& condName, const QString& portName) const
 {
     return portFromCond(condFromConds(condsFromDoc(), condName), portName);
 }
-
 
 QDomNode
 vleVpz::addConditionToDoc(const QString& condName)
@@ -512,6 +536,15 @@ vleVpz::atomicModelFromModel(const QDomNode& node, const QString& atom) const
     return res;
 }
 
+QDomNodeList
+vleVpz::obssListFromObss(const QDomNode& node) const
+{
+    if (node.nodeName() != "observables") {
+        qDebug() << ("Internal error in obssListFromObss (wrong main tag)");
+        return QDomNodeList();
+    }
+    return node.toElement().elementsByTagName("observable");
+}
 
 QDomNodeList
 vleVpz::condsListFromConds(const QDomNode& node) const
@@ -524,6 +557,16 @@ vleVpz::condsListFromConds(const QDomNode& node) const
 }
 
 QDomNodeList
+vleVpz::portsListFromObs(const QDomNode& node) const
+{
+    if (node.nodeName() != "observable") {
+        qDebug() << ("Internal error in portsListFromObs (wrong main tag)");
+        return QDomNodeList();
+    }
+    return node.toElement().elementsByTagName("port");
+}
+
+QDomNodeList
 vleVpz::portsListFromCond(const QDomNode& node) const
 {
     if (node.nodeName() != "condition") {
@@ -533,6 +576,20 @@ vleVpz::portsListFromCond(const QDomNode& node) const
     return node.toElement().elementsByTagName("port");
 }
 
+QDomNode
+vleVpz::obsFromObss(const QDomNode& node, const QString& obsName) const
+{
+    QDomNodeList obss = obssListFromObss(node);
+    for (unsigned int i=0; i < obss.length(); i++){
+        QDomNode child = obss.item(i);
+        if ((child.attributes().contains("name")) and
+            (child.attributes().namedItem("name").nodeValue() == obsName)){
+            return child;
+        }
+    }
+    qDebug() << ("Internal error in condFromConds (not found)");
+    return QDomNode();
+}
 
 QDomNode
 vleVpz::condFromConds(const QDomNode& node, const QString& condName) const
@@ -713,6 +770,19 @@ vleVpz::outputFromOutputs(QDomNode node, const QString& outputName)
     }
     qDebug() << ("Internal error in outputFromOutputs (output not found)");
     return QDomNode();
+}
+
+void
+vleVpz::viewObservableNames(std::vector<std::string>& v) const
+{
+    v.clear();
+    QDomNode outputs = viewsFromDoc();
+    QDomNodeList outputList = outputs.toElement().elementsByTagName("observable");
+    for (unsigned int i =0; i < outputList.length(); i++) {
+        QDomNode output = outputList.item(i);
+        QString o = output.attributes().namedItem("name").nodeValue();
+        v.push_back(o.toStdString());
+    }
 }
 
 void

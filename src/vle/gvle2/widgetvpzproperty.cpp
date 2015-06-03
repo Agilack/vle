@@ -24,7 +24,11 @@
 #include "widgetvpzproperty.h"
 #include "ui_widgetvpzpropertydynamics.h"
 #include "ui_widgetvpzpropertyexpcond.h"
+#include "ui_widgetvpzpropertyobservables.h"
 #include <QCheckBox>
+#include <QGroupBox>
+#include <QRadioButton>
+#include <QVBoxLayout>
 #include <QDebug>
 
 WidgetVpzPropertyDynamics::WidgetVpzPropertyDynamics(QWidget *parent) :
@@ -153,4 +157,79 @@ WidgetVpzPropertyExpCond::onCheckboxToggle(bool checked)
     } else {
         vpz->detachCondToAtomicModel(mModel->getName(), cb->text());
     }
+}
+
+WidgetVpzPropertyObservables::WidgetVpzPropertyObservables(QWidget *parent) :
+        QWidget(parent), ui(new Ui::WidgetVpzPropertyObservables),
+        mModel(0)
+{
+    ui->setupUi(this);
+    //ui->listObs->setVisible(true);
+}
+
+WidgetVpzPropertyObservables::~WidgetVpzPropertyObservables()
+{
+    delete ui;
+}
+
+void
+WidgetVpzPropertyObservables::setModel(vleVpzModel *model)
+{
+    mModel = model;
+    vleVpz* vpz = mModel->getVpz();
+    // First, clear the current list content
+    //ui->listObs->clear();
+    vleVpzDynamic* dyn = mModel->getDynamic();
+    if (dyn) {
+        //TODO only way to see if it is an atomic model ??
+        QDomNodeList obss = vpz->obssListFromObss(
+            vpz->obsFromViews(vpz->viewsFromDoc()));
+
+        QVBoxLayout *vbox = new QVBoxLayout;
+
+        for (unsigned int i=0; i< obss.length(); i++) {
+            QDomNode obs = obss.at(i);
+            QString obsName = vpz->attributeValue(obs, "name");
+            // QListWidgetItem *wi = new QListWidgetItem(ui->listObs);
+            // ui->listObs->addItem(wi);
+            QRadioButton *rb = new QRadioButton(obsName);
+            rb->setAutoExclusive(true);
+
+            if ( mModel->getObservables() == obsName) {
+                rb->setChecked(true);
+            }
+            QObject::connect(rb, SIGNAL(clicked(bool)),
+                             this, SLOT(onRadioButtonClicked(bool)));
+
+            //ui->listObs->setItemWidget(wi, rb);
+
+             ui->listObs->addWidget(rb);
+
+        }
+              ui->listObs->addStretch(1);
+
+              //ui->listObs->setLayout(vbox);
+    }
+}
+
+void
+WidgetVpzPropertyObservables::onRadioButtonClicked(bool checked)
+{
+    // Get the QCheckbox that emit signal
+    QObject   *sender = QObject::sender();
+    QRadioButton *rb     = qobject_cast<QRadioButton *>(sender);
+
+    // Sanity check ... if no model set or checkbox not found
+    if ( (mModel == 0) || (rb == 0) )
+        return;
+
+    // Search the vleObservables associated with the checkbox
+    vleVpz* vpz   = mModel->getVpz();
+    qDebug() << "model " << mModel->getName() << " obs  "<< rb->text();
+
+    // if (checked) {
+    //     vpz->attachCondToAtomicModel(mModel->getName(), cb->text());
+    // } else {
+    //     vpz->detachCondToAtomicModel(mModel->getName(), cb->text());
+    // }
 }

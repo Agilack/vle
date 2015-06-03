@@ -30,6 +30,7 @@
 namespace Ui {
 class WidgetVpzPropertyDynamics;
 class WidgetVpzPropertyExpCond;
+class WidgetVpzPropertyObservables;
 }
 
 class WidgetVpzPropertyDynamics : public QWidget
@@ -71,4 +72,22 @@ private:
     vleVpzModel *mModel;
 };
 
+class WidgetVpzPropertyObservables : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit WidgetVpzPropertyObservables(QWidget *parent = 0);
+    ~WidgetVpzPropertyObservables();
+    void setModel(vleVpzModel *model);
+
+//protected:
+//    void mouseDoubleClickEvent (QMouseEvent *event);
+
+private slots:
+    void onRadioButtonClicked(bool checked);
+
+private:
+    Ui::WidgetVpzPropertyObservables *ui;
+    vleVpzModel *mModel;
+};
 #endif // WIDGETVPZPROPERTY_H
