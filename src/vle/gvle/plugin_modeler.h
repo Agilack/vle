@@ -31,11 +31,17 @@
 #include <QWidget>
 #include <QString>
 #include <vle/gvle/logger.h>
+#include <vle/gvle/vlepackage.h>
+
+#ifndef Q_MOC_RUN
+#include <vle/utils/Package.hpp>
+#endif
 
 namespace vle {
 namespace gvle {
 
 class sourceCpp;
+class vlePackage;
 
 class PluginModeler: public QObject
 {
@@ -49,14 +55,20 @@ public:
     virtual bool     useCustomMainTab();
     virtual QWidget* getMainTabWidget();
     virtual QWidget* openNewClass()  = 0;
-    virtual QWidget* openEditClass(sourceCpp* src) = 0;
-    virtual QWidget* getEditClass(sourceCpp* src);
-    virtual void     closeEditClass(sourceCpp* src);
-//    virtual QWidget *addEditModel(vleVpzModel *model) = 0;//TODO update modeling plugin
-    virtual void     initExpCond(const QString& condName, sourceCpp* src) = 0;
+    virtual QWidget* openEditClass(QString fileName) = 0;
+    virtual QWidget* getEditClass(QString fileName) = 0;
+    virtual void     closeEditClass(QString fileName) = 0;
     virtual void     rename(QString oldName, QString newName) = 0;
-    virtual void  setSettings(QSettings *s) = 0;
-    virtual void  setLogger(Logger *logger) = 0;
+    virtual void     setSettings(QSettings *s) = 0;
+    virtual void     setLogger(Logger *logger) = 0;
+    virtual void     setPackage(vle::utils::Package *pkg) = 0;
+    virtual void     undo(QWidget *w) = 0;
+    virtual void     redo(QWidget *w) = 0;
+    virtual void     save(QWidget *w) = 0;
+    virtual bool     allowClose(QWidget *w) = 0;
+    virtual QString  getClassName(QWidget *w) = 0;
+    virtual void     cloneSrc(QString from, QString to) = 0;
+
 protected:
     QWidget *mMainTabWidget;
 };

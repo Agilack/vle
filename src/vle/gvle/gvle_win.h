@@ -88,6 +88,7 @@ private slots:
     void onProjectRecent4();
     void onProjectRecent5();
     void onCloseProject();
+    void onSaveFile();
     void onQuit();
     void onProjectConfigure();
     void onProjectBuild();
@@ -129,7 +130,7 @@ private:
     PluginSimulator*      mCurrentSim;
     QPluginLoader*        mCurrentSimPlugin;
     QList <QString>       mModelers;
-    QList<QPluginLoader*> mModelerPlugins;
+    QMap<QString,QString> mSrcPlugins;
     QMap<QString,QString> mExpPlugins;
     QMap<QString,QString> mOutputPlugins;
 
@@ -153,6 +154,7 @@ private:
     bool removeDir(const QString& dirName);
     QString treeProjectRelativePath(const QModelIndex index) const;
     void copyFile(QModelIndex index);
+    bool insideSrc(QModelIndex index);
     void removeFile(QModelIndex index);
 
 

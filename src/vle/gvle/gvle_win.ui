@@ -435,6 +435,8 @@ QPushButton:hover{background:url(:/icon/resources/arrow_up_blue.png);}</string>
     <addaction name="actionOpenProject"/>
     <addaction name="menuRecentProjects"/>
     <addaction name="separator"/>
+    <addaction name="actionSaveFile"/>
+    <addaction name="separator"/>
     <addaction name="actionCloseProject"/>
     <addaction name="actionQuit"/>
    </widget>
@@ -521,7 +523,7 @@ QPushButton:hover{background:url(:/icon/resources/arrow_up_blue.png);}</string>
   </action>
   <action name="actionOpenProject">
    <property name="text">
-    <string>OpenProject</string>
+    <string>Open Project</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
@@ -862,9 +864,14 @@ QPushButton:hover{background:url(:/icon/resources/arrow_up_blue.png);}</string>
     <string>Redo</string>
    </property>
   </action>
- </widget>
- <layoutdefault spacing="6" margin="11"/>
- <resources>
+  <action name="actionSaveFile">
+    <property name="text">
+      <string>Save  File</string>
+    </property>
+  </action>
+</widget>
+<layoutdefault spacing="6" margin="11"/>
+<resources>
   <include location="gvle.qrc"/>
   <include location="../../apps/gvle/gvle.qrc"/>
  </resources>

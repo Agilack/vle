@@ -101,6 +101,9 @@ gvle_win::gvle_win(QWidget *parent) :
     QObject::connect(ui->actionRecent5,
                      SIGNAL(triggered()), this,
                      SLOT(onProjectRecent5()));
+    QObject::connect(ui->actionSaveFile,
+                     SIGNAL(triggered()), this,
+                     SLOT(onSaveFile()));
     QObject::connect(ui->actionCloseProject,
                      SIGNAL(triggered()), this,
                      SLOT(onCloseProject()));
@@ -326,6 +329,8 @@ void gvle_win::loadModelerPlugins(PluginModeler *plugin, QString fileName)
     QAction *openAct = newPluginMenu->addAction(tr("Open"));
     openAct->setProperty("fileName", fileName);
 
+    mSrcPlugins[plugin->getname()] = fileName;
+
     QObject::connect(newAct,  SIGNAL(triggered()), this, SLOT(onNewModelerClass()));
     QObject::connect(openAct, SIGNAL(triggered()), this, SLOT(onOpenModeler()));
 }
@@ -542,6 +547,16 @@ void gvle_win::onCloseProject()
     closeProject();
 }
 
+void gvle_win::onSaveFile()
+{
+    QWidget *w = ui->tabWidget->currentWidget();
+    QVariant tabType = w->property("type");
+    if (tabType.isValid() && (tabType.toString() == "modelingAtom")) {
+        pluginModelerView *tabModeling = (pluginModelerView *)w;
+        tabModeling->save();
+    }
+}
+
 /**
  * @brief gvle_win::onQuit
  *        Handler for menu function : File > Quit
@@ -700,17 +715,16 @@ void gvle_win::onLaunchSimulation()
     QWidget *w = ui->tabWidget->currentWidget();
 
     vle::gvle::fileVpzView *vpzView = qobject_cast<vle::gvle::fileVpzView *>(w);
-    if (vpzView == 0)
+    if (vpzView == 0) {
         return;
+    }
 
-    if (mSimOpened)
+    if (mSimOpened) {
         return;
-
-    if ( ! ui->actionSimNone->isChecked())
-    {
+    }
+    if ( ! ui->actionSimNone->isChecked()) {
         // If plugin not already loadloed (or unloaded)
-        if (mCurrentSimPlugin == 0)
-        {
+        if (mCurrentSimPlugin == 0) {
             // Instantiate a new loader - See QTBUG-24079
             QString pluginFile = mSimulatorPlugins.value(mCurrentSimName);
             mCurrentSimPlugin = new QPluginLoader(pluginFile);
@@ -720,20 +734,21 @@ void gvle_win::onLaunchSimulation()
         }
         mCurrentSimPlugin->load();
         QObject *plugin = mCurrentSimPlugin->instance();
-        if ( ! mCurrentSimPlugin->isLoaded())
+        if ( ! mCurrentSimPlugin->isLoaded()) {
             return;
+        }
         PluginSimulator *sim = qobject_cast<PluginSimulator *>(plugin);
-        if ( ! sim)
+        if ( ! sim) {
             return;
+        }
 
         mCurrentSim = sim;
 
         sim->setSettings(mSettings);
-        //sim->setLogger(mLogger);
+        sim->setLogger(mLogger);
 
         QWidget *newTab = sim->getWidget();
-        if (newTab)
-        {
+        if (newTab) {
             // Configure Pluggin for the requested VPZ
             newTab->setProperty("type",   QString("simulation"));
             newTab->setProperty("plugin", QString("yes"));
@@ -753,8 +768,7 @@ void gvle_win::onLaunchSimulation()
 
         // Search a toolbox widget from the plugin
         QWidget *newTool = sim->getWidgetToolbar();
-        if (newTool)
-        {
+        if (newTool) {
             try {
                 int nid;
                 nid = ui->rightStack->addWidget(newTool);
@@ -764,9 +778,7 @@ void gvle_win::onLaunchSimulation()
                 qDebug() << "Simulation pluggin toolbar error";
             }
         }
-    }
-    else
-    {
+    } else {
         // Create a new tab
         simulationView * newTab = new simulationView();
         newTab->setProperty("type", QString("simulation"));
@@ -798,18 +810,30 @@ void
 gvle_win::onUndo()
 {
     QWidget *w = ui->tabWidget->currentWidget();
-    fileVpzView *tabVpz = (fileVpzView *)w;
-    tabVpz->vpm()->undo();
 
+    QVariant tabType = w->property("type");
+    if (tabType.isValid() && (tabType.toString() == "modelingAtom")) {
+        pluginModelerView *tabModeling = (pluginModelerView *)w;
+        tabModeling->undo();
+    } else {
+        fileVpzView *tabVpz = (fileVpzView *)w;
+        tabVpz->vpm()->undo();
+    }
 }
 
 void
 gvle_win::onRedo()
 {
     QWidget *w = ui->tabWidget->currentWidget();
-    fileVpzView *tabVpz = (fileVpzView *)w;
-    tabVpz->vpm()->redo();
 
+    QVariant tabType = w->property("type");
+    if (tabType.isValid() && (tabType.toString() == "modelingAtom")) {
+        pluginModelerView *tabModeling = (pluginModelerView *)w;
+        tabModeling->redo();
+    } else {
+        fileVpzView *tabVpz = (fileVpzView *)w;
+        tabVpz->vpm()->redo();
+    }
 }
 
 void gvle_win::onSelectSimulator(bool isChecked)
@@ -1035,6 +1059,11 @@ bool gvle_win::tabClose(int index)
                     return false;
             }
         }
+    } else if (w->property("type").toString().compare("modelingAtom") == 0) {
+        pluginModelerView *tabModeling = (pluginModelerView *)w;
+        if (not tabModeling->allowClose()) {
+            return false;
+        };
     }
 
     ui->tabWidget->removeTab(index);
@@ -1161,67 +1190,102 @@ void gvle_win::onTreeDblClick(QModelIndex index)
     fileName.replace(currentDir, "");
 
     QFileInfo selectedFileInfo = QFileInfo(fileName);
-    if (selectedFileInfo.suffix() != "vpz")
+    if (selectedFileInfo.suffix() != "vpz" &&
+        selectedFileInfo.suffix() != "cpp")
         return;
 
-    QString relPath;
-    relPath = treeProjectRelativePath(index);
+    if (selectedFileInfo.suffix() == "vpz") {
+        //TODO should be better handled
+        QString relPath;
+        QStringList fileNameSplit = fileName.split("/");
+        for (int i=1;i<fileNameSplit.length();i++) {
+            if (i>1) {
+                relPath += "/";
+            }
+            relPath += fileNameSplit.at(i);
+        }
+        QString basepath = mCurrPackage.getDir(vle::utils::PKG_SOURCE).c_str();
+        QString relPathVpm = relPath;
+        relPathVpm.replace(".vpz", ".vpm");
+        vleVpm* selVpm = new vleVpm(basepath + "/" + relPath,
+                                    basepath + "/metadata/" + relPathVpm);
 
-    QString basepath = mCurrPackage.getDir(vle::utils::PKG_SOURCE).c_str();
-    QString relPathVpm = relPath;
-    relPathVpm.replace(".vpz", ".vpm");
-    vleVpm* selVpm = new vleVpm(basepath+"/"+relPath,
-            basepath+"/metadata/"+relPathVpm);
+        selVpm->setLogger(mLogger);
+        selVpm->setBasePath(mPackage->getName());
+        selVpm->setPackage(mPackage);
 
-    selVpm->setLogger(mLogger);
-    selVpm->setBasePath(mPackage->getName());
-    selVpm->setPackage(mPackage);
+        // Search if the selected VPZ has already been opened
+        int alreadyOpened = 0;
+        int i;
+        for (i = 0; i < ui->tabWidget->count(); i++) {
+            QWidget *w = ui->tabWidget->widget(i);
+            QVariant tabType = w->property("type");
+            if (tabType.toString() != "vpz")
+                continue;
+            // Compare the tab title with the requested vpz name
+            if (ui->tabWidget->tabText(i) == fileName) {
+                alreadyOpened = i;
+                break;
+            }
+        }
 
+        if (alreadyOpened)
+            // If the VPZ is opened, select his tab
+            ui->tabWidget->setCurrentIndex(alreadyOpened);
+        else {
+            fileVpzView * newTab = new fileVpzView();
+            newTab->setProperty("type", QString("vpz"));
+            newTab->setVpm(selVpm);
 
-    // Search if the selected VPZ has already been opened
-    int alreadyOpened = 0;
-    int i;
-    for (i = 0; i < ui->tabWidget->count(); i++)
-    {
-        QWidget *w = ui->tabWidget->widget(i);
-        QVariant tabType = w->property("type");
-        if (tabType.toString() != "vpz")
-            continue;
-        // Compare the tab title with the requested vpz name
-        if (ui->tabWidget->tabText(i) == fileName)
-        {
-            alreadyOpened = i;
-            break;
+            int n = ui->tabWidget->addTab(newTab, fileName);
+            ui->tabWidget->setCurrentIndex(n);
+            newTab->show();
+
+            QObject::connect(selVpm, SIGNAL(sigChanged(QString)),
+                             this,  SLOT  (setChangedVpz(QString)));
+
+            // Create a new toolbox for the right column
+            int nid;
+            QWidget *newRTool = newTab->getTool();
+            nid = ui->rightStack->addWidget(newRTool);
+            ui->rightStack->setCurrentWidget(newRTool);
+            newTab->setProperty("wTool", nid);
+            //set undo redo enabled
+            ui->actionUndo->setEnabled(true);
+            ui->actionRedo->setEnabled(true);
+        }
+    } else {
+        QString fname = selectedFileInfo.absoluteFilePath();
+        QString bname = selectedFileInfo.baseName();
+        QString basepath = mCurrPackage.getDir(vle::utils::PKG_SOURCE).c_str();
+        QString nameSm = basepath + "/metadata/src/" + bname + ".sm";
+        QFile file(nameSm);
+        QString metaPluginName = "";
+        if (file.exists()) {
+            QDomDocument* mDocSm = new QDomDocument("vle_project_metadata");
+            QXmlInputSource source(&file);
+            QXmlSimpleReader reader;
+            mDocSm->setContent(&source, &reader);
+            QDomElement docElem = mDocSm->documentElement();
+
+            QDomNode srcPluginNode =
+                mDocSm->elementsByTagName("srcPlugin").item(0);
+            QString srcPlugin = srcPluginNode.attributes().namedItem("name").nodeValue();
+            metaPluginName = srcPlugin.split("@").at(0);
+            if (mSrcPlugins.find(metaPluginName) !=  mSrcPlugins.end()) {
+                QString fileName = mSrcPlugins.find(metaPluginName).value();
+
+                pluginModelerView *tab;
+                tab = openModeler(fileName);
+                tab->showSummary();
+                tab->onOpenTab(fname);
+            } else {
+                mLogger->log(tr("The ") + metaPluginName + tr(" modeling plugin could not be loaded!"));
+            }
         }
     }
-
-    if (alreadyOpened)
-        // If the VPZ is opened, select his tab
-        ui->tabWidget->setCurrentIndex(alreadyOpened);
-    else
-    {
-        fileVpzView * newTab = new fileVpzView();
-        newTab->setProperty("type", QString("vpz"));
-        newTab->setVpm(selVpm);
-
-        int n = ui->tabWidget->addTab(newTab, fileName);
-        ui->tabWidget->setCurrentIndex(n);
-        newTab->show();
-
-        QObject::connect(selVpm, SIGNAL(sigChanged(QString)),
-                         this,  SLOT  (setChangedVpz(QString)));
-
-        // Create a new toolbox for the right column
-        int nid;
-        QWidget *newRTool = newTab->getTool();
-        nid = ui->rightStack->addWidget(newRTool);
-        ui->rightStack->setCurrentWidget(newRTool);
-        newTab->setProperty("wTool", nid);
-        //set undo redo enabled
-        ui->actionUndo->setEnabled(true);
-        ui->actionRedo->setEnabled(true);
-    }
 }
+
 
 void gvle_win::onCustomContextMenu(const QPoint &point)
 {
@@ -1235,7 +1299,6 @@ void gvle_win::onCustomContextMenu(const QPoint &point)
     QString currentDir = QDir::currentPath() += "/";
     fileName.replace(currentDir, "");
     QFileInfo selectedFileInfo = QFileInfo(fileName);
-
 
     QAction *lastAction;
 
@@ -1252,6 +1315,17 @@ void gvle_win::onCustomContextMenu(const QPoint &point)
     if (selectedFileInfo.suffix() != "vpz") {
         lastAction->setDisabled(true);
     }
+    if (insideSrc(index)) {
+        int i = 3;
+        QMapIterator<QString, QString> it(mSrcPlugins);
+        while (it.hasNext()) {
+            it.next();
+            lastAction = ctxMenu.addAction(tr("New") + " " + it.key());
+            lastAction->setData(++i);
+            lastAction->setProperty("srcPlugin", it.value());
+        }
+    }
+
     QAction* selectedItem = ctxMenu.exec(globalPos);
     if (selectedItem) {
         int actCode = selectedItem->data().toInt();
@@ -1263,8 +1337,25 @@ void gvle_win::onCustomContextMenu(const QPoint &point)
         } else if (actCode == 3) {
             mProjectFileSytem->setReadOnly(false);
             copyFile(index);
+        } else {
+            QVariant srcPluginFileName = selectedItem->property("srcPlugin");
+            if ( ! srcPluginFileName.isValid())
+                return;
+            QString fileName = srcPluginFileName.toString();
+
+            pluginModelerView *tab;
+            tab = openModeler(fileName);
+            tab->addNewTab();
         }
     }
+}
+
+bool gvle_win::insideSrc(QModelIndex index)
+{
+
+    QString filePath = mProjectFileSytem->filePath(index);
+    QString srcPath = QString(mCurrPackage.getDir(vle::utils::PKG_SOURCE).c_str()) + "/src";
+    return filePath.indexOf(srcPath) == 0;
 }
 
 void  gvle_win::onCurrentChanged(const QModelIndex& /*index*/)
@@ -1425,7 +1516,6 @@ void gvle_win::removeFile(QModelIndex index)
 
 void gvle_win::onRefreshFiles()
 {
-    qDebug() << "gvle_win::onRefreshFiles()";
     treeProjectUpdate();
 }
 
@@ -1461,8 +1551,11 @@ pluginModelerView *gvle_win::openModeler(QString filename)
     }
 
     wview = new pluginModelerView();
-    wview->setPlugin(filename);
     wview->setPackage(mPackage);
+    wview->setLogger(mLogger);
+    wview->setPlugin(filename);
+    wview->setProperty("type", QString("modelingAtom"));
+
 
     QObject::connect(wview, SIGNAL(refreshFiles()),
                      this,  SLOT  (onRefreshFiles()));
@@ -1491,25 +1584,34 @@ void gvle_win::loadModelerClasses(pluginModelerView *modeler)
         QFileInfoList list = dir.entryInfoList();
         for (int i = 0; i < list.size(); ++i) {
             QFileInfo fileInfo = list.at(i);
-            QString fname = fileInfo.fileName();
+            QString fname = fileInfo.absoluteFilePath();
+            QString bname = fileInfo.baseName();
 
             vu::Template tpl;
             try {
                 std::string tplPlugin, packagename, conf;
 
-                tpl.open(fname.toStdString());
-                tpl.tag(tplPlugin, packagename, conf);
+                QString basepath = mCurrPackage.getDir(vle::utils::PKG_SOURCE).c_str();
+                QString nameSm = basepath + "/metadata/src/" + bname + ".sm";
+                QFile file(nameSm);
+                QString metaPluginName = "";
+                if (file.exists()) {
+                    QDomDocument* mDocSm = new QDomDocument("vle_project_metadata");
+                    QXmlInputSource source(&file);
+                    QXmlSimpleReader reader;
+                    mDocSm->setContent(&source, &reader);
+                    QDomElement docElem = mDocSm->documentElement();
 
-                if (pluginName != QString(tplPlugin.c_str()))
+                    QDomNode srcPluginNode =
+                        mDocSm->elementsByTagName("srcPlugin").item(0);
+                    QString srcPlugin = srcPluginNode.attributes().namedItem("name").nodeValue();
+                    metaPluginName = srcPlugin.split("@").at(0);
+                }
+
+                if (pluginName != metaPluginName)
                     continue;
-                QString tplConf = QString( conf.c_str() );
-                QStringList confEntries = tplConf.split(";");
 
-                // Get the class name from conf
-                QStringList classNameEntry = confEntries.filter("class:");
-                QString className = classNameEntry.at(0).split(":").at(1);
-
-                modeler->addClass(className, fname);
+                modeler->addClass(bname, fname);
             } catch(...) {
                 continue;
             }

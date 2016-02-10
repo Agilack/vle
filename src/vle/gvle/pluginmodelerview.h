@@ -49,17 +49,23 @@ public:
     ~pluginModelerView();
     void setPlugin(QString filename);
     void setPackage(vlePackage *package);
+    void setLogger(Logger* logger);
     void addClass(QString name, QString filename);
     void showSummary();
     void addEditTab(QWidget *widget, QString name);
     QString getName();
     QString getFilename();
+    void undo();
+    void redo();
+    void save();
+    bool allowClose();
+
 
 public slots:
     void addNewTab();
     void onTabRename(QWidget *tab, QString name);
     void onSaveClass(QString name);
-    void onOpenTab  (QString filename);
+    void onOpenTab  (QString fileName);
     void onCloseTab (int index);
     void onDuplicateRequest(QString className);
     void onDuplicateClass(QString srcFile, QString dst);
@@ -76,7 +82,8 @@ private:
     QPluginLoader         *mLoader;
     PluginModeler         *mModeler;
     vlePackage            *mPackage;
-    QList<sourceCpp *>     mListSources;
+    Logger*               mLogger;
+    QList<sourceCpp *>    mListSources;
 };
 
 }}//namepsaces

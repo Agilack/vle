@@ -27,6 +27,7 @@
 #include "ui_pluginmodelerview.h"
 #include "pluginmodelersummary.h"
 
+#include <QDebug>
 
 namespace vle {
 namespace gvle {
@@ -106,11 +107,50 @@ QString pluginModelerView::getFilename()
     return mPluginFile;
 }
 
-/**
- * @brief pluginModelerView::setPackage
- *        Set the working package
- *
- */
+void pluginModelerView::undo()
+{
+    QWidget *w = ui->tabWidget->currentWidget();
+    if (mModeler) {
+        mModeler->undo(w);
+    }
+}
+
+void pluginModelerView::redo()
+{
+    QWidget *w = ui->tabWidget->currentWidget();
+    if (mModeler) {
+        mModeler->redo(w);
+    }
+}
+
+void pluginModelerView::save()
+{
+    QWidget *w = ui->tabWidget->currentWidget();
+    if (mModeler) {
+        mModeler->save(w);
+    }
+}
+
+bool pluginModelerView::allowClose()
+{
+    for (int i = 1; i < ui->tabWidget->count(); i++)
+    {
+        QWidget* w = ui->tabWidget->widget(i);
+        if (mModeler) {
+             if (not mModeler->allowClose(w)) {
+                 return false;
+             }
+         }
+    }
+    return true;
+}
+
+void pluginModelerView::setLogger(Logger *logger)
+{
+    mLogger = logger;
+    mLogger->log("pluginModelerView::setLogger");
+}
+
 void pluginModelerView::setPackage(vlePackage *package)
 {
     mPackage = package;
@@ -133,6 +173,8 @@ void pluginModelerView::setPlugin(QString filename)
         return;
 
     mModeler = qobject_cast<PluginModeler *>(plugin);
+    if (! mModeler)
+        return;
 
     QObject::connect(mModeler, SIGNAL(nameChanged(QWidget *, QString)),
                      this,     SLOT  (onTabRename(QWidget *, QString)));
@@ -184,6 +226,11 @@ void pluginModelerView::setMainWidget()
     else
         mainTab = new pluginModelerSummary();
 
+    vle::utils::Package* mStdPackage= mPackage->getStdPackage();
+
+    mModeler->setPackage(mPackage->getStdPackage());
+    mModeler->setLogger(mLogger);
+
     QObject::connect(mainTab, SIGNAL(openClass(QString)),
                      this,    SLOT  (onOpenTab(QString)));
     QObject::connect(mainTab, SIGNAL(newClass()),
@@ -209,31 +256,42 @@ void pluginModelerView::setMainWidget()
  *        Called when a Summary (or main) tab emit an Open signal
  *
  */
-void pluginModelerView::onOpenTab(QString filename)
+void pluginModelerView::onOpenTab(QString fileName)
 {
-    if (mModeler == 0)
+    if (mModeler == 0) {
         return;
-
+    }
     sourceCpp *src = 0;
-    for (int i = 0; i < mListSources.count(); i++)
-    {
+    for (int i = 0; i < mListSources.count(); i++) {
         src = mListSources.at(i);
-        if (src->getFilename() == filename)
+        if (src->getFilename() == fileName)
             break;
         src = 0;
     }
-    if (src == 0)
-    {
-        src = mPackage->openSourceCpp(filename);
+    if (src == 0) {
+        src = mPackage->openSourceCpp(fileName);
         mListSources.append(src);
+        vle::utils::Package* pkg = mPackage->getStdPackage();
+        QFileInfo selectedFileInfo = QFileInfo(fileName);
+        QString bname = selectedFileInfo.baseName();
+        QString basepath = pkg->getDir(vle::utils::PKG_SOURCE).c_str();
+        QFile file(basepath + "/metadata/src/" + bname + ".sm");
+        QString srcClassName;
+        if (file.exists()) {
+            QDomDocument* mDocSm = new QDomDocument("vle_project_metadata");
+            QXmlInputSource source(&file);
+            QXmlSimpleReader reader;
+            mDocSm->setContent(&source, &reader);
+            QDomElement docElem = mDocSm->documentElement();
 
-        QWidget *tab = mModeler->openEditClass(src);
-        sourceCppTemplate *tpl = src->getTemplate();
-        addEditTab(tab, tpl->getTagValue("class") );
-    }
-    else
-    {
-        QWidget *w = mModeler->getEditClass(src);
+            QDomNode srcPluginNode =
+                mDocSm->elementsByTagName("srcPlugin").item(0);
+            srcClassName = srcPluginNode.attributes().namedItem("class").nodeValue();
+        }
+        QWidget *tab = mModeler->openEditClass(fileName);
+        addEditTab(tab, srcClassName);
+    } else {
+        QWidget *w = mModeler->getEditClass(fileName);
         ui->tabWidget->setCurrentWidget(w);
     }
 }
@@ -247,27 +305,23 @@ void pluginModelerView::onCloseTab (int index)
 {
     QWidget *w = ui->tabWidget->widget(index);
 
-    QString className = ui->tabWidget->tabText(index);
+    vle::utils::Package* pkg = mPackage->getStdPackage();
 
-    for (int i = 0; i < mListSources.count(); i++)
-    {
-        sourceCpp *src = mListSources.at(i);
-        sourceCppTemplate *tpl = src->getTemplate();
-        QString srcClass = tpl->getTagValue("class");
-        if (srcClass == className)
-        {
-            // Uncomment this line tu use the close() methode
-            // In this case, the "delete w" must be removed
-            //mModeler->closeEditClass(src);
-
-            // Remove item from list ...
-            mListSources.removeAt(i);
-            // ... and delete it
-            //delete src; // Do not delete anymore ... managed by package
-            break;
+    if (mModeler) {
+        if (mModeler->allowClose(w)) {
+            QString editedClass = mModeler->getClassName(w);
+            QString basepath = pkg->getDir(vle::utils::PKG_SOURCE).c_str();
+            QString filePath = basepath + "/src/" + editedClass + ".cpp";
+            mModeler->closeEditClass(filePath);
+            ui->tabWidget->removeTab(index);
+            for (int i = 0; i < mListSources.count(); i++) {
+                if (filePath == mListSources.at(i)->getFilename()) {
+                    mListSources.removeAt(i);
+                    break;
+                }
+            }
         }
     }
-    delete w;
 }
 
 /**
@@ -398,17 +452,12 @@ void pluginModelerView::onDuplicateClass(QString srcFile, QString dst)
         msgBox.exec();
         return;
     }
-    sourceCpp *srcCpp = mPackage->openSourceCpp(srcFile);
-    sourceCppTemplate *tpl = srcCpp->getTemplate();
 
-    QWidget *mod = mModeler->openEditClass(srcCpp);
-    mModeler->rename(tpl->getTagValue("class"), dst);
+    QFileInfo srcFileInfo = QFileInfo(srcFile);
 
-    onSaveClass(dst);
+    mModeler->cloneSrc(srcFileInfo.baseName(), dst);
+    addClass(dst, mPackage->getSrcFilePath(dst + ".cpp"));
 
-    delete mod;
-
-    tab->endDuplicate();
 }
 
 }}//namespaces

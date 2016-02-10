@@ -72,26 +72,4 @@ QWidget *PluginModeler::getMainTabWidget()
     return mMainTabWidget;
 }
 
-/**
- * @brief PluginModeler::getEditClass
- *        Get the widget of an already opened class
- *
- */
-QWidget *PluginModeler::getEditClass(sourceCpp *src)
-{
-    (void) src;
-    return 0;
-}
-
-/**
- * @brief PluginModeler::closeEditClass
- *        Close and delete a previously opened class widget
- *
- */
-void PluginModeler::closeEditClass(sourceCpp *src)
-{
-    (void) src;
-    return;
-}
-
 }} //namespaces
